@@ -61,6 +61,7 @@ import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.eclipse.jgit.treewalk.TreeWalk;
 
 public class Main {
+	private static final int TEXTWIDTH = 80;
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
 		System.out.println("Loading repository from " + args[0]);
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
@@ -68,22 +69,50 @@ public class Main {
 		//
 		Git git = new Git(repository);
 		//
-		mark(git, c -> marker(c));
+		List<Report> reports = mark(git, Main::commitSizeMarker);
+		// Print report summaries
+		for(Report r : reports) {
+			Commit c = r.getCommit();
+			String n = c.id.getName();
+			System.out.println(toLineString(n, '.', "[" + r.getMark() + " marks]", TEXTWIDTH));
+		}
+		// Now print report details
+		for(Report r : reports) {
+			printReport(r);
+		}
 	}
 
-	/**
-	 * A simple marking function for projects.
-	 *
-	 * @param c
-	 * @return
-	 */
-	private static int marker(Commit c) {
-		if (c.size() < 50) {
-			return 1;
-		} else if (c.size() < 100) {
-			return 0;
+	public static Mark commitSizeMarker(Commit c) {
+		int mark;
+		long size = c.size();
+		if (size < 50) {
+			mark = 1;
+		} else if (size < 100) {
+			mark = 0;
 		} else {
-			return -1;
+			mark = -1;
+		}
+		String r = "";
+		for (Entry e : c.entries) {
+			r += toLineString(e.name, ' ', "(" + e.size() + " bytes)", TEXTWIDTH) + "\n";
+		}
+		return new Mark(mark, 1, "Commit size", r);
+	}
+
+	private static void printReport(Report r) {
+		System.out.println();
+		System.out.println(toLineString('=',TEXTWIDTH));
+		System.out.println("COMMIT: " + r.getCommit().id.getName());
+		System.out.println(toLineString('=',TEXTWIDTH));
+		System.out.println("\"" + r.getCommit().title + "\"\n");
+		// Print task summaries
+		for (Mark m : r) {
+			System.out.println(toLineString(m.getName(), ' ', "(" + m.getMark() + " marks)", TEXTWIDTH));
+			System.out.println(toLineString('-',TEXTWIDTH));
+			String out = m.getOutput();
+			if(out != null) {
+				System.out.println(out);
+			}
 		}
 	}
 
@@ -97,14 +126,19 @@ public class Main {
 	 * @throws GitAPIException
 	 * @throws IOException
 	 */
-	private static void mark(Git git, Function<Commit, Integer> marker)
+	private static List<Report> mark(Git git, Function<Commit, Mark>... tasks)
 			throws NoHeadException, GitAPIException, IOException {
 		List<Commit> commits = toCommits(git, git.log().call());
+		List<Report> reports = new ArrayList<>();
 		// Print out the commits
 		for (Commit c : commits) {
-			System.out.print("[" + marker.apply(c) + " marks] ");
-			System.out.println(c.toString());
+			ArrayList<Mark> marks = new ArrayList<>();
+			for (Function<Commit, Mark> t : tasks) {
+				marks.add(t.apply(c));
+			}
+			reports.add(new Report(c, marks));
 		}
+		return reports;
 	}
 
 	/**
@@ -257,6 +291,12 @@ public class Main {
 		}
 	}
 
+	/**
+	 * Represents an entry within a commit.
+	 *
+	 * @author David J. Pearce
+	 *
+	 */
 	private static class Entry {
 		public final String name;
 		public final byte[] before;
@@ -277,9 +317,101 @@ public class Main {
 
 		@Override
 		public String toString() {
-			String n = "\"" + name + "\"";
+			String n = name + " (";
 			int size = size();
-			return (size < 0) ? n + size : n + "+" + size;
+			n = (size < 0) ? n + size : n + "+" + size;
+			return n + " bytes)";
 		}
+	}
+
+	private static class Report implements Iterable<Mark> {
+		private final Commit commit;
+		private final List<Mark> marks;
+
+		public Report(Commit commit, List<Mark> marks) {
+			this.commit = commit;
+			this.marks = marks;
+		}
+
+		public Commit getCommit() {
+			return commit;
+		}
+
+		@Override
+		public Iterator<Mark> iterator() {
+			return marks.iterator();
+		}
+
+		public int getMark() {
+			int total = 0;
+			for (Mark m : marks) {
+				total += m.getMark();
+			}
+			return total;
+		}
+
+		public int getMaximumMark() {
+			int total = 0;
+			for (Mark m : marks) {
+				total += m.getMaximumMark();
+			}
+			return total;
+		}
+	}
+
+	/**
+	 * An individual mark awarded by a marking task for a given commit.
+	 *
+	 * @author David J. Pearce
+	 *
+	 */
+	private static class Mark {
+		private final int mark;
+		private final int maximum;
+		private final String name;
+		private final String output;
+
+		public Mark(int mark, int max, String name, String stdout) {
+			this.mark = mark;
+			this.maximum = max;
+			this.name = name;
+			this.output = stdout;
+		}
+
+		public int getMark() {
+			return mark;
+		}
+
+		public int getMaximumMark() {
+			return maximum;
+		}
+
+		public String getName() {
+			return name;
+		}
+
+		public String getOutput() {
+			return output;
+		}
+	}
+
+	private static String toLineString(String left, char c, String right, int count) {
+		String r = left + " ";
+		count -= left.length() + 1;
+		count -= right.length() + 1;
+		for (int i = 0; i < count; ++i) {
+			r += c;
+		}
+		r += " ";
+		r += right;
+		return r;
+	}
+
+	private static String toLineString(char c, int count) {
+		String r = "";
+		for (int i = 0; i < count; ++i) {
+			r += c;
+		}
+		return r;
 	}
 }
