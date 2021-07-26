@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 import org.eclipse.jgit.api.DiffCommand;
 import org.eclipse.jgit.api.Git;
@@ -61,22 +62,60 @@ import org.eclipse.jgit.treewalk.TreeWalk;
 
 public class Main {
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
-		System.out.println("[INFO] Loading repository from " + args[0]);
+		System.out.println("Loading repository from " + args[0]);
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
-		Repository repository = builder.setGitDir(new File(args[0]))
-		  .readEnvironment() // scan environment GIT_* variables
-		  .findGitDir() // scan up the file system tree
-		  .build();
+		Repository repository = builder.setGitDir(new File(args[0])).readEnvironment().findGitDir().build();
 		//
 		Git git = new Git(repository);
 		//
+		mark(git, c -> marker(c));
+	}
+
+	/**
+	 * A simple marking function for projects.
+	 *
+	 * @param c
+	 * @return
+	 */
+	private static int marker(Commit c) {
+		if (c.size() < 50) {
+			return 1;
+		} else if (c.size() < 100) {
+			return 0;
+		} else {
+			return -1;
+		}
+	}
+
+	/**
+	 * Mark a given repository using a given mechanism for turning commits into
+	 * marks.
+	 *
+	 * @param git    The repository to mark.
+	 * @param marker
+	 * @throws NoHeadException
+	 * @throws GitAPIException
+	 * @throws IOException
+	 */
+	private static void mark(Git git, Function<Commit, Integer> marker)
+			throws NoHeadException, GitAPIException, IOException {
 		List<Commit> commits = toCommits(git, git.log().call());
 		// Print out the commits
-		for(Commit c : commits) {
+		for (Commit c : commits) {
+			System.out.print("[" + marker.apply(c) + " marks] ");
 			System.out.println(c.toString());
 		}
 	}
 
+	/**
+	 * Convert a sequence of commits into a more ammenable form for analysis.
+	 *
+	 * @param git
+	 * @param revs
+	 * @return
+	 * @throws GitAPIException
+	 * @throws IOException
+	 */
 	private static List<Commit> toCommits(Git git, Iterable<RevCommit> revs) throws GitAPIException, IOException {
 		ArrayList<Commit> commits = new ArrayList<>();
 		RevCommit last = null;
@@ -198,6 +237,14 @@ public class Main {
 			this.id = id;
 			this.title = title;
 			this.entries = entries;
+		}
+
+		public long size() {
+			long s = 0;
+			for(int i=0;i!=entries.size();++i) {
+				s += entries.get(i).size();
+			}
+			return s;
 		}
 
 		@Override
