@@ -73,8 +73,8 @@ public interface Marker {
 		// Return the result
 		return w -> {
 			String r = "";
-			for (Commit.Entry e : c.entries) {
-				r += Util.toLineString(e.name, ' ', "(" + e.size() + " bytes)", w) + "\n";
+			for (Commit.Entry e : c.getEntries()) {
+				r += Util.toLineString(e.getPath(), ' ', "(" + e.size() + " bytes)", w) + "\n";
 			}
 			return new MarkingReport.Mark(mark, 1, "Commit size", r);
 		};
@@ -95,8 +95,8 @@ public interface Marker {
 		//
 		try {
 			int count = 0;
-			for (Commit.Entry e : c.entries) {
-				Path path = dir.resolve(e.name);
+			for (Commit.Entry e : c.getEntries()) {
+				Path path = dir.resolve(e.getPath());
 				File parent = path.toFile().getParentFile();
 				if (parent.exists() || parent.mkdirs()) {
 					count = count + 1;
@@ -104,7 +104,7 @@ public interface Marker {
 					// Create the file
 					Files.createFile(path);
 					// Write the file
-					Files.write(path, e.after, StandardOpenOption.TRUNCATE_EXISTING);
+					Files.write(path, e.getBytesAfter(), StandardOpenOption.TRUNCATE_EXISTING);
 				} else {
 					throw new RuntimeException("PROBLEM: " + parent);
 				}

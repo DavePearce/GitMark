@@ -79,7 +79,7 @@ public class Main {
 		// Print report summaries
 		for (MarkingReport r : reports) {
 			Commit c = r.getCommit();
-			String n = c.id.getName();
+			String n = c.getObjectId().getName();
 			System.out.println(Util.toLineString(n, '.', "[" + r.getMark() + " marks]", TEXTWIDTH));
 		}
 		// Now print report details
@@ -91,9 +91,9 @@ public class Main {
 	private static void printReport(MarkingReport r) {
 		System.out.println();
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
-		System.out.println("COMMIT: " + r.getCommit().id.getName());
+		System.out.println("COMMIT: " + r.getCommit().getObjectId().getName());
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
-		System.out.println("\"" + r.getCommit().title + "\"\n");
+		System.out.println("\"" + r.getCommit().getTitle() + "\"\n");
 		// Print task summaries
 		for (MarkingReport.Mark m : r) {
 			System.out.println(Util.toLineString(m.getName(), ' ', "(" + m.getMark() + " marks)", TEXTWIDTH));

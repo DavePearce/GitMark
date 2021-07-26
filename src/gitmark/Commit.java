@@ -31,6 +31,7 @@ package gitmark;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.jgit.api.Git;
@@ -55,10 +56,10 @@ import org.eclipse.jgit.treewalk.TreeWalk;
  * @author David J. Pearcde
  *
  */
-public class Commit {
-	public final ObjectId id;
-	public final String title;
-	public final List<Entry> entries;
+public class Commit implements Iterable<Commit.Entry> {
+	private final ObjectId id;
+	private final String title;
+	private final List<Entry> entries;
 
 	public Commit(ObjectId id, String title, List<Entry> entries) {
 		this.id = id;
@@ -68,21 +69,37 @@ public class Commit {
 
 	public long size() {
 		long s = 0;
-		for(int i=0;i!=entries.size();++i) {
-			s += entries.get(i).size();
+		for(int i=0;i!=getEntries().size();++i) {
+			s += getEntries().get(i).size();
 		}
 		return s;
+	}
+
+	public ObjectId getObjectId() {
+		return id;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public List<Entry> getEntries() {
+		return entries;
+	}
+
+	@Override
+	public Iterator<Entry> iterator() {
+		return entries.iterator();
 	}
 
 	@Override
 	public String toString() {
-		String s = id.getName() + ";\"" + title + "\"";
-		for(int i=0;i!=entries.size();++i) {
-			s += ";" + entries.get(i);
+		String s = id.getName() + ";\"" + getTitle() + "\"";
+		for(int i=0;i!=getEntries().size();++i) {
+			s += ";" + getEntries().get(i);
 		}
 		return s;
 	}
-
 
 	/**
 	 * Represents an entry within a commit.
@@ -91,26 +108,53 @@ public class Commit {
 	 *
 	 */
 	public static class Entry {
-		public final String name;
-		public final byte[] before;
-		public final byte[] after;
+		private final String path;
+		private final byte[] before;
+		private final byte[] after;
 
-		public Entry(String n, byte[] before, byte[] after) {
+		public Entry(String path, byte[] before, byte[] after) {
 			if(before == null || after == null) {
 				throw new IllegalArgumentException("invalid parameters");
 			}
-			this.name = n;
+			this.path = path;
 			this.before = before;
 			this.after = after;
 		}
 
 		public int size() {
-			return after.length - before.length;
+			return getBytesAfter().length - getBytesBefore().length;
+		}
+
+		/**
+		 * Get the path of this entry in the repository.
+		 *
+		 * @return
+		 */
+		public String getPath() {
+			return path;
+		}
+
+		/**
+		 * Get the bytes of this file as it was <i>before</i> the commit in question.
+		 *
+		 * @return
+		 */
+		public byte[] getBytesBefore() {
+			return before;
+		}
+
+		/**
+		 * Get the bytes of this file as it was <i>after<i> the commit in question.
+		 *
+		 * @return
+		 */
+		public byte[] getBytesAfter() {
+			return after;
 		}
 
 		@Override
 		public String toString() {
-			String n = name + " (";
+			String n = getPath() + " (";
 			int size = size();
 			n = (size < 0) ? n + size : n + "+" + size;
 			return n + " bytes)";
