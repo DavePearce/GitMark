@@ -64,7 +64,8 @@ public class Main {
 	private static final int TEXTWIDTH = 80;
 
 	private static final Marker[] MARKERS = {
-			c -> Marker.commitSizeMarker(c, 50, 100)
+			c -> Marker.commitSizeMarker(c, 50, 100),
+			Marker::javaBuildMarker
 	};
 
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {

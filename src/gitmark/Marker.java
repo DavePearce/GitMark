@@ -29,7 +29,12 @@
 //OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package gitmark;
 
-import java.util.function.Function;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
 
 /**
  * A mark is responsible for marking a given commit.
@@ -37,7 +42,9 @@ import java.util.function.Function;
  * @author David J. Pearce
  *
  */
-public interface Marker extends Function<Commit,Marker.Result> {
+public interface Marker {
+
+	public Result apply(Commit c) throws IOException;
 
 	public interface Result {
 		MarkingReport.Mark toMark(int width);
@@ -71,5 +78,45 @@ public interface Marker extends Function<Commit,Marker.Result> {
 			}
 			return new MarkingReport.Mark(mark, 1, "Commit size", r);
 		};
+	}
+
+	/**
+	 * Construct a marker which determines whether or not a given commit builds
+	 * using javac. This is done by checking out the contents of the repository
+	 * after the commit into a temporary directory and trying to build it.
+	 *
+	 * @param c
+	 * @return
+	 * @throws IOException
+	 */
+	public static Result javaBuildMarker(Commit c) throws IOException {
+		// Create temporary directory for checkout.
+		Path dir = Files.createTempDirectory("gitmark");
+		//
+		try {
+			int count = 0;
+			for (Commit.Entry e : c.entries) {
+				Path path = dir.resolve(e.name);
+				File parent = path.toFile().getParentFile();
+				if (parent.exists() || parent.mkdirs()) {
+					count = count + 1;
+					System.out.println("WRITING: " + path);
+					// Create the file
+					Files.createFile(path);
+					// Write the file
+					Files.write(path, e.after, StandardOpenOption.TRUNCATE_EXISTING);
+				} else {
+					throw new RuntimeException("PROBLEM: " + parent);
+				}
+			}
+			final int _count = count;
+			return w -> {
+				String r = "Compiled " + _count + " file(s).";
+				return new MarkingReport.Mark(0, 0, "Java Compile", r);
+			};
+		} finally {
+			// No matter what, delete the directory
+			//Files.walk(dir).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+		}
 	}
 }
