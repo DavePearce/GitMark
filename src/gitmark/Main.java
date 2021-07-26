@@ -1,6 +1,6 @@
 //BSD 3-Clause License
 //
-//Copyright (c) 2021, David Pearce
+//Copyright (c) 2021, David J. Pearce
 //All rights reserved.
 //
 //Redistribution and use in source and binary forms, with or without
@@ -62,6 +62,11 @@ import org.eclipse.jgit.treewalk.TreeWalk;
 
 public class Main {
 	private static final int TEXTWIDTH = 80;
+
+	private static final Marker[] MARKERS = {
+			c -> Marker.commitSizeMarker(c, 50, 100)
+	};
+
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
 		System.out.println("Loading repository from " + args[0]);
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
@@ -69,46 +74,29 @@ public class Main {
 		//
 		Git git = new Git(repository);
 		//
-		List<Report> reports = mark(git, Main::commitSizeMarker);
+		List<MarkingReport> reports = mark(git, MARKERS);
 		// Print report summaries
-		for(Report r : reports) {
+		for (MarkingReport r : reports) {
 			Commit c = r.getCommit();
 			String n = c.id.getName();
-			System.out.println(toLineString(n, '.', "[" + r.getMark() + " marks]", TEXTWIDTH));
+			System.out.println(Util.toLineString(n, '.', "[" + r.getMark() + " marks]", TEXTWIDTH));
 		}
 		// Now print report details
-		for(Report r : reports) {
+		for (MarkingReport r : reports) {
 			printReport(r);
 		}
 	}
 
-	public static Mark commitSizeMarker(Commit c) {
-		int mark;
-		long size = c.size();
-		if (size < 50) {
-			mark = 1;
-		} else if (size < 100) {
-			mark = 0;
-		} else {
-			mark = -1;
-		}
-		String r = "";
-		for (Entry e : c.entries) {
-			r += toLineString(e.name, ' ', "(" + e.size() + " bytes)", TEXTWIDTH) + "\n";
-		}
-		return new Mark(mark, 1, "Commit size", r);
-	}
-
-	private static void printReport(Report r) {
+	private static void printReport(MarkingReport r) {
 		System.out.println();
-		System.out.println(toLineString('=',TEXTWIDTH));
+		System.out.println(Util.toLineString('=',TEXTWIDTH));
 		System.out.println("COMMIT: " + r.getCommit().id.getName());
-		System.out.println(toLineString('=',TEXTWIDTH));
+		System.out.println(Util.toLineString('=',TEXTWIDTH));
 		System.out.println("\"" + r.getCommit().title + "\"\n");
 		// Print task summaries
-		for (Mark m : r) {
-			System.out.println(toLineString(m.getName(), ' ', "(" + m.getMark() + " marks)", TEXTWIDTH));
-			System.out.println(toLineString('-',TEXTWIDTH));
+		for (MarkingReport.Mark m : r) {
+			System.out.println(Util.toLineString(m.getName(), ' ', "(" + m.getMark() + " marks)", TEXTWIDTH));
+			System.out.println(Util.toLineString('-',TEXTWIDTH));
 			String out = m.getOutput();
 			if(out != null) {
 				System.out.println(out);
@@ -126,17 +114,17 @@ public class Main {
 	 * @throws GitAPIException
 	 * @throws IOException
 	 */
-	private static List<Report> mark(Git git, Function<Commit, Mark>... tasks)
+	private static List<MarkingReport> mark(Git git, Marker[] tasks)
 			throws NoHeadException, GitAPIException, IOException {
 		List<Commit> commits = toCommits(git, git.log().call());
-		List<Report> reports = new ArrayList<>();
+		List<MarkingReport> reports = new ArrayList<>();
 		// Print out the commits
 		for (Commit c : commits) {
-			ArrayList<Mark> marks = new ArrayList<>();
-			for (Function<Commit, Mark> t : tasks) {
-				marks.add(t.apply(c));
+			ArrayList<MarkingReport.Mark> marks = new ArrayList<>();
+			for (Marker t : tasks) {
+				marks.add(t.apply(c).toMark(TEXTWIDTH));
 			}
-			reports.add(new Report(c, marks));
+			reports.add(new MarkingReport(c, marks));
 		}
 		return reports;
 	}
@@ -155,263 +143,14 @@ public class Main {
 		RevCommit last = null;
 		for (RevCommit r : revs) {
 			if (last != null) {
-				commits.add(toCommit(git, r, last));
+				commits.add(Commit.toCommit(git, r, last));
 			}
 			last = r;
 		}
-		commits.add(toCommit(git, null, last));
+		commits.add(Commit.toCommit(git, null, last));
 		// Revsere them so oldets comes first.
 		Collections.reverse(commits);
 		//
 		return commits;
-	}
-
-	/**
-	 * Convert a given JGit commit into a simpler form for processing.
-	 *
-	 * @param git
-	 * @param before
-	 * @param after
-	 * @return
-	 * @throws GitAPIException
-	 * @throws IOException
-	 */
-	private static Commit toCommit(Git git, RevCommit before, RevCommit after) throws GitAPIException, IOException {
-		final Repository repository = git.getRepository();
-		AbstractTreeIterator newTreeIter = getTreeIterator(repository, after);
-		List<Entry> entries = new ArrayList<>();
-		if (before == null) {
-			// This is the initial commit, therefore all files in the initial tree are
-			// included.
-			try (TreeWalk treeWalk = new TreeWalk(repository)) {
-				treeWalk.addTree(newTreeIter);
-				treeWalk.setRecursive(true);
-				// treeWalk.setFilter(filter);
-				while (treeWalk.next()) {
-					ObjectId oid = treeWalk.getObjectId(0);
-					byte[] bytes = repository.open(oid).getBytes();
-					entries.add(new Entry(treeWalk.getPathString(), new byte[0], bytes));
-				}
-			}
-		} else {
-			// This is not the initial commit, therefore use the default diff algorithm to
-			// determine which files are changed.
-			AbstractTreeIterator oldTreeIter = getTreeIterator(repository, before);
-			List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
-			//
-			for (DiffEntry e : diffs) {
-				entries.add(toEntry(repository, e));
-			}
-		}
-		return new Commit(after.getId(), after.getShortMessage(), entries);
-	}
-
-	/**
-	 * Convert a given DiffEntry into a form which is a little more ammeanable for
-	 * this analysis.
-	 *
-	 * @param repository
-	 * @param e
-	 * @return
-	 * @throws LargeObjectException
-	 * @throws MissingObjectException
-	 * @throws IOException
-	 */
-	private static Entry toEntry(Repository repository, DiffEntry e)
-			throws LargeObjectException, MissingObjectException, IOException {
-		final ObjectId oid = e.getOldId().toObjectId();
-		final ObjectId nid = e.getNewId().toObjectId();
-		byte[] oldBytes;
-		byte[] newBytes;
-		String path;
-		switch (e.getChangeType()) {
-		case ADD:
-		case COPY: {
-			path = e.getPath(DiffEntry.Side.NEW);
-			oldBytes = new byte[0];
-			newBytes = repository.open(nid).getBytes();
-			break;
-		}
-		case DELETE: {
-			path = e.getPath(DiffEntry.Side.OLD);
-			oldBytes = repository.open(oid).getBytes();
-			newBytes = new byte[0];
-			break;
-		}
-		case MODIFY: {
-			path = e.getPath(DiffEntry.Side.NEW);
-			newBytes = repository.open(nid).getBytes();
-			oldBytes = repository.open(oid).getBytes();
-			break;
-		}
-		default: {
-			return null;
-		}
-		}
-		return new Entry(path,oldBytes,newBytes);
-	}
-
-	private static AbstractTreeIterator getTreeIterator(Repository repository, RevCommit commit) throws IOException {
-		try (RevWalk walk = new RevWalk(repository)) {
-			// Extract tree associated with this particular commit.
-			RevTree tree = walk.parseTree(commit.getTree().getId());
-			// Construct tree parser
-			CanonicalTreeParser treeParser = new CanonicalTreeParser(null, repository.newObjectReader(), tree.getId());
-			walk.dispose();
-			return treeParser;
-		}
-	}
-
-	private static class Commit {
-		public final ObjectId id;
-		public final String title;
-		public final List<Entry> entries;
-
-		public Commit(ObjectId id, String title, List<Entry> entries) {
-			this.id = id;
-			this.title = title;
-			this.entries = entries;
-		}
-
-		public long size() {
-			long s = 0;
-			for(int i=0;i!=entries.size();++i) {
-				s += entries.get(i).size();
-			}
-			return s;
-		}
-
-		@Override
-		public String toString() {
-			String s = id.getName() + ";\"" + title + "\"";
-			for(int i=0;i!=entries.size();++i) {
-				s += ";" + entries.get(i);
-			}
-			return s;
-		}
-	}
-
-	/**
-	 * Represents an entry within a commit.
-	 *
-	 * @author David J. Pearce
-	 *
-	 */
-	private static class Entry {
-		public final String name;
-		public final byte[] before;
-		public final byte[] after;
-
-		public Entry(String n, byte[] before, byte[] after) {
-			if(before == null || after == null) {
-				throw new IllegalArgumentException("invalid parameters");
-			}
-			this.name = n;
-			this.before = before;
-			this.after = after;
-		}
-
-		public int size() {
-			return after.length - before.length;
-		}
-
-		@Override
-		public String toString() {
-			String n = name + " (";
-			int size = size();
-			n = (size < 0) ? n + size : n + "+" + size;
-			return n + " bytes)";
-		}
-	}
-
-	private static class Report implements Iterable<Mark> {
-		private final Commit commit;
-		private final List<Mark> marks;
-
-		public Report(Commit commit, List<Mark> marks) {
-			this.commit = commit;
-			this.marks = marks;
-		}
-
-		public Commit getCommit() {
-			return commit;
-		}
-
-		@Override
-		public Iterator<Mark> iterator() {
-			return marks.iterator();
-		}
-
-		public int getMark() {
-			int total = 0;
-			for (Mark m : marks) {
-				total += m.getMark();
-			}
-			return total;
-		}
-
-		public int getMaximumMark() {
-			int total = 0;
-			for (Mark m : marks) {
-				total += m.getMaximumMark();
-			}
-			return total;
-		}
-	}
-
-	/**
-	 * An individual mark awarded by a marking task for a given commit.
-	 *
-	 * @author David J. Pearce
-	 *
-	 */
-	private static class Mark {
-		private final int mark;
-		private final int maximum;
-		private final String name;
-		private final String output;
-
-		public Mark(int mark, int max, String name, String stdout) {
-			this.mark = mark;
-			this.maximum = max;
-			this.name = name;
-			this.output = stdout;
-		}
-
-		public int getMark() {
-			return mark;
-		}
-
-		public int getMaximumMark() {
-			return maximum;
-		}
-
-		public String getName() {
-			return name;
-		}
-
-		public String getOutput() {
-			return output;
-		}
-	}
-
-	private static String toLineString(String left, char c, String right, int count) {
-		String r = left + " ";
-		count -= left.length() + 1;
-		count -= right.length() + 1;
-		for (int i = 0; i < count; ++i) {
-			r += c;
-		}
-		r += " ";
-		r += right;
-		return r;
-	}
-
-	private static String toLineString(char c, int count) {
-		String r = "";
-		for (int i = 0; i < count; ++i) {
-			r += c;
-		}
-		return r;
 	}
 }
