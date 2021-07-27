@@ -27,85 +27,65 @@
 //CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 //OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 //OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-package gitmark;
+package gitmark.marker;
 
-import java.util.Iterator;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
-/**
- * Provides a generic API for extracting key information about the results of
- * marking.
- *
- * @author David J. Pearce
- *
- */
-public class MarkingReport implements Iterable<MarkingReport.Mark> {
-	private final Commit commit;
-	private final List<Mark> marks;
+import gitmark.core.Commit;
+import gitmark.core.Marking;
+import gitmark.core.Marking.BooleanResult;
+import gitmark.util.JavaCompiler;
+import gitmark.util.Util;
 
-	public MarkingReport(Commit commit, List<Mark> marks) {
-		this.commit = commit;
-		this.marks = marks;
-	}
+public class JavaBuildMarker implements Marking.Task<Boolean> {
 
-	public Commit getCommit() {
-		return commit;
+	@Override
+	public String getName() {
+		return "Java Build";
 	}
 
 	@Override
-	public Iterator<Mark> iterator() {
-		return marks.iterator();
-	}
-
-	public int getMark() {
-		int total = 0;
-		for (Mark m : marks) {
-			total += m.getMark();
-		}
-		return total;
-	}
-
-	public int getMaximumMark() {
-		int total = 0;
-		for (Mark m : marks) {
-			total += m.getMaximumMark();
-		}
-		return total;
-	}
-
-	/**
-	 * An individual mark awarded by a marking task for a given commit.
-	 *
-	 * @author David J. Pearce
-	 *
-	 */
-	public static class Mark {
-		private final int mark;
-		private final int maximum;
-		private final String name;
-		private final String output;
-
-		public Mark(int mark, int max, String name, String stdout) {
-			this.mark = mark;
-			this.maximum = max;
-			this.name = name;
-			this.output = stdout;
-		}
-
-		public int getMark() {
-			return mark;
-		}
-
-		public int getMaximumMark() {
-			return maximum;
-		}
-
-		public String getName() {
-			return name;
-		}
-
-		public String getOutput() {
-			return output;
+	public Marking.Result<Boolean> apply(Commit c) throws IOException {
+		// Create temporary directory for checkout.
+		Path dir = Files.createTempDirectory("gitmark");
+		//
+		try {
+			// Checkout all Java source files
+			List<Path> files = Util.checkout(dir, c, s -> s.endsWith(".java"));
+			// Attempt to build Java source files
+			JavaCompiler javac = new JavaCompiler();
+			javac.setWarnings(false);
+			javac.setSourceDirectory(dir);
+			Util.Result result = javac.compile(files);
+			Integer exitCode = result.getExitCode();
+			// Determine whether build was successful or not.
+			final boolean success = (exitCode != null && exitCode == 0);
+			return new BooleanResult(success) {
+				@Override
+				public String toString(int width) {
+					String r = "";
+					String out = new String(result.getStdOut());
+					String err = new String(result.getStdErr());
+					if (exitCode == null) {
+						r += "\n(timeout)\n";
+					}
+					if (out.length() > 0) {
+						r += "\n";
+						r += out;
+					}
+					if (err.length() > 0) {
+						r += "\n";
+						r += err;
+					}
+					return r;
+				}
+			};
+		} finally {
+			// No matter what, delete the build directory
+			Util.delete(dir);
 		}
 	}
 }

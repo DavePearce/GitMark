@@ -27,51 +27,39 @@
 //CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 //OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 //OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-package gitmark;
+package gitmark.marker;
 
-/**
- * Some general utilities (e.g. for text formatting).
- *
- * @author David J. Pearce
- *
- */
-public class Util {
-	/**
-	 * Construct a string representing a line of text of a given width, where one
-	 * component is left justified and the other is right justified. A special
-	 * character is used for formatting the space in between.
-	 *
-	 * @param left
-	 * @param c
-	 * @param right
-	 * @param width
-	 * @return
-	 */
-	public static String toLineString(String left, char c, String right, int width) {
-		String r = left + " ";
-		width -= left.length() + 1;
-		width -= right.length() + 1;
-		for (int i = 0; i < width; ++i) {
-			r += c;
-		}
-		r += " ";
-		r += right;
-		return r;
+import java.io.IOException;
+
+import gitmark.core.Commit;
+import gitmark.core.Marking;
+import gitmark.util.Util;
+
+public class CommitSizeMarker implements Marking.Task<Integer> {
+
+	@Override
+	public String getName() {
+		return "Commit Size";
 	}
 
-	/**
-	 * Construct a string representing a line of text of a given width made of a
-	 * single character. This is useful for creating separators, etc.
-	 *
-	 * @param c
-	 * @param count
-	 * @return
-	 */
-	public static String toLineString(char c, int count) {
-		String r = "";
-		for (int i = 0; i < count; ++i) {
-			r += c;
-		}
-		return r;
+	@Override
+	public Marking.Result<Integer> apply(Commit c) throws IOException {
+		final int size = (int) c.size();
+		return new Marking.IntegerResult(size) {
+			@Override
+			public String toString(int w) {
+				String r = "Commit size:\n\n";
+				int total = 0;
+				for (Commit.Entry e : c.getEntries()) {
+					total += e.size();
+					if (e.changed()) {
+						r += Util.toLineString(e.getPath(), ' ', e.size() + " bytes", w) + "\n";
+					}
+				}
+				r += "\n";
+				r += Util.toLineString("total", ' ', total + " bytes", w);
+				return r;
+			}
+		};
 	}
 }

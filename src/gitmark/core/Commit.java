@@ -27,12 +27,15 @@
 //CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 //OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 //OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-package gitmark;
+package gitmark.core;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -121,8 +124,23 @@ public class Commit implements Iterable<Commit.Entry> {
 			this.after = after;
 		}
 
+		/**
+		 * Return the difference (in bytes) between the file before this commit, and the
+		 * file after this commit.
+		 *
+		 * @return
+		 */
 		public int size() {
 			return getBytesAfter().length - getBytesBefore().length;
+		}
+
+		/**
+		 * Check whether or not this file was actually changed by this commit.
+		 *
+		 * @return
+		 */
+		public boolean changed() {
+			return before != after;
 		}
 
 		/**
@@ -173,32 +191,60 @@ public class Commit implements Iterable<Commit.Entry> {
 	 */
 	public static Commit toCommit(Git git, RevCommit before, RevCommit after) throws GitAPIException, IOException {
 		final Repository repository = git.getRepository();
-		AbstractTreeIterator newTreeIter = getTreeIterator(repository, after);
 		List<Commit.Entry> entries = new ArrayList<>();
 		if (before == null) {
 			// This is the initial commit, therefore all files in the initial tree are
 			// included.
-			try (TreeWalk treeWalk = new TreeWalk(repository)) {
-				treeWalk.addTree(newTreeIter);
-				treeWalk.setRecursive(true);
-				// treeWalk.setFilter(filter);
-				while (treeWalk.next()) {
-					ObjectId oid = treeWalk.getObjectId(0);
-					byte[] bytes = repository.open(oid).getBytes();
-					entries.add(new Commit.Entry(treeWalk.getPathString(), new byte[0], bytes));
-				}
-			}
+			walkEntries(repository, after, (path, bytes) -> {
+				entries.add(new Commit.Entry(path, new byte[0], bytes));
+			});
 		} else {
 			// This is not the initial commit, therefore use the default diff algorithm to
 			// determine which files are changed.
+			AbstractTreeIterator newTreeIter = getTreeIterator(repository, after);
 			AbstractTreeIterator oldTreeIter = getTreeIterator(repository, before);
 			List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
-			//
+			HashSet<String> changed = new HashSet<>();
+			// Add all files which have changed
 			for (DiffEntry e : diffs) {
-				entries.add(toEntry(repository, e));
+				Commit.Entry entry = toEntry(repository, e);
+				entries.add(entry);
+				changed.add(entry.path);
 			}
+			// Add all files which have not changed
+			walkEntries(repository, after, (path, bytes) -> {
+				if (!changed.contains(path)) {
+					entries.add(new Commit.Entry(path, bytes, bytes));
+				}
+			});
 		}
 		return new Commit(after.getId(), after.getShortMessage(), entries);
+	}
+
+	/**
+	 * Visit all files in the repository at the point of a given commit. Every entry
+	 * will trigger a call the visitor function.
+	 *
+	 * @param repository
+	 * @param commit
+	 * @param fn
+	 * @throws IOException
+	 */
+	public static void walkEntries(Repository repository, RevCommit commit, BiConsumer<String, byte[]> fn)
+			throws IOException {
+		AbstractTreeIterator newTreeIter = getTreeIterator(repository, commit);
+		// This is the initial commit, therefore all files in the initial tree are
+		// included.
+		try (TreeWalk treeWalk = new TreeWalk(repository)) {
+			treeWalk.addTree(newTreeIter);
+			treeWalk.setRecursive(true);
+			// treeWalk.setFilter(filter);
+			while (treeWalk.next()) {
+				ObjectId oid = treeWalk.getObjectId(0);
+				byte[] bytes = repository.open(oid).getBytes();
+				fn.accept(treeWalk.getPathString(), bytes);
+			}
+		}
 	}
 
 	/**

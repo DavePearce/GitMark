@@ -33,40 +33,26 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.function.Function;
 
-import org.eclipse.jgit.api.DiffCommand;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.NoHeadException;
-import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.errors.LargeObjectException;
-import org.eclipse.jgit.errors.MissingObjectException;
-import org.eclipse.jgit.lib.AbbreviatedObjectId;
-import org.eclipse.jgit.lib.AnyObjectId;
-import org.eclipse.jgit.lib.Constants;
-import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.ObjectLoader;
-import org.eclipse.jgit.lib.ObjectReader;
-import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevTree;
-import org.eclipse.jgit.revwalk.RevWalk;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
-import org.eclipse.jgit.treewalk.AbstractTreeIterator;
-import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.eclipse.jgit.treewalk.TreeWalk;
+
+import gitmark.core.Commit;
+import gitmark.core.Marking;
+import gitmark.marker.CommitSizeMarker;
+import gitmark.marker.JavaBuildMarker;
+import gitmark.util.Util;
 
 public class Main {
 	private static final int TEXTWIDTH = 80;
 
-	private static final Marker[] MARKERS = {
-			c -> Marker.commitSizeMarker(c, 50, 100),
-			Marker::javaBuildMarker
-	};
+	//private static final Marking.Task<Integer> MARKERS = new CommitSizeMarker();
+	private static final Marking.Task<Integer> MARK = Marking.IF(new JavaBuildMarker(), Marking.ONE, Marking.ZERO);
 
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
 		System.out.println("Loading repository from " + args[0]);
@@ -75,34 +61,29 @@ public class Main {
 		//
 		Git git = new Git(repository);
 		//
-		List<MarkingReport> reports = mark(git, MARKERS);
+		List<Marking.Report> reports = mark(git, MARK);
 		// Print report summaries
-		for (MarkingReport r : reports) {
+		for (Marking.Report r : reports) {
 			Commit c = r.getCommit();
 			String n = c.getObjectId().getName();
-			System.out.println(Util.toLineString(n, '.', "[" + r.getMark() + " marks]", TEXTWIDTH));
+			System.out.println(Util.toLineString(n, '.', "[" + r.getResult().getValue() + " marks]", TEXTWIDTH));
 		}
 		// Now print report details
-		for (MarkingReport r : reports) {
+		for (Marking.Report r : reports) {
 			printReport(r);
 		}
 	}
 
-	private static void printReport(MarkingReport r) {
+	private static void printReport(Marking.Report r) {
+		Marking.Result<Integer> result = r.getResult();
 		System.out.println();
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
-		System.out.println("COMMIT: " + r.getCommit().getObjectId().getName());
+		System.out.println(Util.toLineString("COMMIT: " + r.getCommit().getObjectId().getName(), ' ',
+				result.getValue() + " marks", TEXTWIDTH));
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
 		System.out.println("\"" + r.getCommit().getTitle() + "\"\n");
 		// Print task summaries
-		for (MarkingReport.Mark m : r) {
-			System.out.println(Util.toLineString(m.getName(), ' ', "(" + m.getMark() + " marks)", TEXTWIDTH));
-			System.out.println(Util.toLineString('-',TEXTWIDTH));
-			String out = m.getOutput();
-			if(out != null) {
-				System.out.println(out);
-			}
-		}
+		System.out.println(result.toString(TEXTWIDTH));
 	}
 
 	/**
@@ -115,19 +96,15 @@ public class Main {
 	 * @throws GitAPIException
 	 * @throws IOException
 	 */
-	private static List<MarkingReport> mark(Git git, Marker[] tasks)
+	private static List<Marking.Report> mark(Git git, Marking.Task<Integer> task)
 			throws NoHeadException, GitAPIException, IOException {
 		List<Commit> commits = toCommits(git, git.log().call());
-		List<MarkingReport> reports = new ArrayList<>();
-		// Print out the commits
+		List<Marking.Report> results = new ArrayList<>();
+		// Compute all the marks
 		for (Commit c : commits) {
-			ArrayList<MarkingReport.Mark> marks = new ArrayList<>();
-			for (Marker t : tasks) {
-				marks.add(t.apply(c).toMark(TEXTWIDTH));
-			}
-			reports.add(new MarkingReport(c, marks));
+			results.add(new Marking.Report(c, task.apply(c)));
 		}
-		return reports;
+		return results;
 	}
 
 	/**
