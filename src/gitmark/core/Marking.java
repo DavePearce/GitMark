@@ -32,6 +32,8 @@ package gitmark.core;
 import java.io.IOException;
 import java.util.function.Function;
 
+import gitmark.marker.JavaBuildMarker;
+
 public class Marking {
 	/**
 	 * A marking task is something which needs to be done in order to produce a
@@ -113,6 +115,13 @@ public class Marking {
 		}
 	}
 
+	/**
+	 * Represents an actual mark awarded for some component of the assessment for a
+	 * given commit. The provenance of the mark is determined through the result.
+	 *
+	 * @author David J. Pearce
+	 *
+	 */
 	public static class Report {
 		private final Commit commit;
 		private final Result<Integer> result;
@@ -131,47 +140,30 @@ public class Marking {
 		}
 	}
 
-	public static final Task<Integer> ZERO = new Task<Integer>() {
+	public static final Task<Integer> ZERO = INT(0);
+	public static final Task<Integer> ONE = INT(1);
+	public static final Task<Integer> MINUS_ONE = INT(-1);
 
-		@Override
-		public String getName() {
-			return "(0 marks)";
-		}
+	public static final Task<Integer> INT(int v) {
+		return new Task<Integer>() {
 
-		@Override
-		public Result<Integer> apply(Commit c) throws IOException {
-			return new IntegerResult(0) {
+			@Override
+			public String getName() {
+				return Integer.toString(v);
+			}
 
-				@Override
-				public String toString(int width) {
-					return "???";
-				}
+			@Override
+			public Result<Integer> apply(Commit c) throws IOException {
+				return new IntegerResult(v) {
+					@Override
+					public String toString(int width) {
+						return Integer.toString(v);
+					}
+				};
+			}
 
-			};
-		}
-
-	};
-
-	public static final Task<Integer> ONE = new Task<Integer>() {
-
-		@Override
-		public String getName() {
-			return "(1 mark)";
-		}
-
-		@Override
-		public Result<Integer> apply(Commit c) throws IOException {
-			return new IntegerResult(0) {
-
-				@Override
-				public String toString(int width) {
-					return "???";
-				}
-
-			};
-		}
-
-	};
+		};
+	}
 
 	/**
 	 * Construct a marking task composed from other tasks which implements a
@@ -200,6 +192,28 @@ public class Marking {
 				} else {
 					return no.apply(c);
 				}
+			}
+		};
+	}
+
+	public static final Marking.Task<Boolean> LT(Task<Integer> lhs, Task<Integer> rhs) {
+		return new Task<Boolean>() {
+			@Override
+			public String getName() {
+				return "<";
+			}
+
+			@Override
+			public Result<Boolean> apply(Commit c) throws IOException {
+				Result<Integer> l = lhs.apply(c);
+				Result<Integer> r = rhs.apply(c);
+				return new BooleanResult(l.getValue() < r.getValue()) {
+
+					@Override
+					public String toString(int width) {
+						return l.toString() + " < " + r.toString();
+					}
+				};
 			}
 		};
 	}

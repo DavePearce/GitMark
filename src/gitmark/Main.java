@@ -44,6 +44,7 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 
 import gitmark.core.Commit;
 import gitmark.core.Marking;
+import static gitmark.core.Marking.*;
 import gitmark.marker.CommitSizeMarker;
 import gitmark.marker.JavaBuildMarker;
 import gitmark.util.Util;
@@ -51,8 +52,10 @@ import gitmark.util.Util;
 public class Main {
 	private static final int TEXTWIDTH = 80;
 
-	//private static final Marking.Task<Integer> MARKERS = new CommitSizeMarker();
-	private static final Marking.Task<Integer> MARK = Marking.IF(new JavaBuildMarker(), Marking.ONE, Marking.ZERO);
+	private static final Marking.Task<Boolean> JAVA_BUILD = new JavaBuildMarker();
+	private static final Marking.Task<Integer> COMMIT_SIZE = new CommitSizeMarker();
+
+	private static final Marking.Task<Integer> MARK = IF(JAVA_BUILD, IF(LT(COMMIT_SIZE, INT(100)), ONE, IF(LT(COMMIT_SIZE, INT(200)), ZERO, MINUS_ONE)), MINUS_ONE);
 
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
 		System.out.println("Loading repository from " + args[0]);
