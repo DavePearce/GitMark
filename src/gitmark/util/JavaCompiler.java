@@ -107,7 +107,6 @@ public class JavaCompiler {
 		for (Path p : files) {
 			args.add(p.toString());
 		}
-		System.out.println("GOT: " + args);
 		return Util.exec(timeout, args);
 	}
 

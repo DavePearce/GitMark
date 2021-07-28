@@ -44,18 +44,19 @@ import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 
 import gitmark.core.Commit;
 import gitmark.core.Marking;
+import gitmark.tasks.JavaBuildTask;
+
 import static gitmark.core.Marking.*;
-import gitmark.marker.CommitSizeMarker;
-import gitmark.marker.JavaBuildMarker;
+
 import gitmark.util.Util;
 
 public class Main {
 	private static final int TEXTWIDTH = 80;
 
-	private static final Marking.Task<Boolean> JAVA_BUILD = new JavaBuildMarker();
-	private static final Marking.Task<Integer> COMMIT_SIZE = new CommitSizeMarker();
+	private static final Marking.Task<Boolean> JAVA_BUILD = new JavaBuildTask();
 
-	private static final Marking.Task<Integer> MARK = IF(JAVA_BUILD, IF(LT(COMMIT_SIZE, INT(100)), ONE, IF(LT(COMMIT_SIZE, INT(200)), ZERO, MINUS_ONE)), MINUS_ONE);
+	private static final Marking.Task<Integer> MARK = IF(JAVA_BUILD, IF(LT(COMMIT_SIZE, INT(100)), ONE, ZERO),
+			MINUS_ONE);
 
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
 		System.out.println("Loading repository from " + args[0]);
@@ -86,7 +87,9 @@ public class Main {
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
 		System.out.println("\"" + r.getCommit().getTitle() + "\"\n");
 		// Print task summaries
-		System.out.println(result.toString(TEXTWIDTH));
+		System.out.println(result.toSummaryString(TEXTWIDTH));
+		// Print provenance
+		System.out.println(result.toProvenanceString(TEXTWIDTH));
 	}
 
 	/**

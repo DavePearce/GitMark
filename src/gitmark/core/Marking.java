@@ -32,7 +32,8 @@ package gitmark.core;
 import java.io.IOException;
 import java.util.function.Function;
 
-import gitmark.marker.JavaBuildMarker;
+import gitmark.tasks.JavaBuildTask;
+import gitmark.util.Util;
 
 public class Marking {
 	/**
@@ -70,49 +71,9 @@ public class Marking {
 	 *
 	 */
 	public interface Result<T> {
-		String toString(int width);
-
+		String toSummaryString(int width);
+		String toProvenanceString(int width);
 		T getValue();
-	}
-
-	/**
-	 * Represents the outcome of a marking task which produces a boolean yes/no. For
-	 * example, did the build succeed?
-	 *
-	 * @author David J. Pearce
-	 *
-	 */
-	public abstract static class BooleanResult implements Result<Boolean> {
-		private final boolean value;
-
-		public BooleanResult(boolean v) {
-			this.value = v;
-		}
-
-		@Override
-		public Boolean getValue() {
-			return value;
-		}
-	}
-
-	/**
-	 * Represents the outcome of marking task which produces a integer value of some
-	 * kind. For example, how many files were modified in this commit?
-	 *
-	 * @author David J. Pearce
-	 *
-	 */
-	public abstract static class IntegerResult implements Result<Integer> {
-		private final int value;
-
-		public IntegerResult(int v) {
-			this.value = v;
-		}
-
-		@Override
-		public Integer getValue() {
-			return value;
-		}
 	}
 
 	/**
@@ -154,14 +115,23 @@ public class Marking {
 
 			@Override
 			public Result<Integer> apply(Commit c) throws IOException {
-				return new IntegerResult(v) {
+				return new Result<Integer>() {
 					@Override
-					public String toString(int width) {
-						return Integer.toString(v);
+					public String toSummaryString(int width) {
+						return "= " + Integer.toString(v) + " mark(s).";
+					}
+
+					@Override
+					public Integer getValue() {
+						return v;
+					}
+
+					@Override
+					public String toProvenanceString(int width) {
+						return "";
 					}
 				};
 			}
-
 		};
 	}
 
@@ -177,44 +147,119 @@ public class Marking {
 	 */
 	public static <T> Task<T> IF(Task<Boolean> condition, Task<T> yes, Task<T> no) {
 		return new Task<T>() {
-
 			@Override
 			public String getName() {
 				return "If " + condition.getName();
 			}
 
 			@Override
-			public Result<T> apply(Commit c) throws IOException {
-				Result<Boolean> r = condition.apply(c);
-				// FIXME: we've lost something here!
-				if (r.getValue()) {
-					return yes.apply(c);
+			public Result<T> apply(Commit commit) throws IOException {
+				Result<Boolean> c = condition.apply(commit);
+				Result<T> r;
+				if (c.getValue()) {
+					r = yes.apply(commit);
 				} else {
-					return no.apply(c);
+					r = no.apply(commit);
 				}
+				return new Result<T>() {
+					@Override
+					public String toSummaryString(int width) {
+						String b = c.getValue() ? "Yes." : "No.";
+						String str = condition.getName() + "? " + b + "\n";
+						return str + r.toSummaryString(width);
+					}
+
+					@Override
+					public T getValue() {
+						return r.getValue();
+					}
+
+					@Override
+					public String toProvenanceString(int width) {
+						return c.toProvenanceString(width) + r.toProvenanceString(width);
+					}
+				};
 			}
 		};
 	}
 
+	/**
+	 * A simple marking task which checks whether the outcome of one task is lower
+	 * than another.
+	 *
+	 * @param lhs
+	 * @param rhs
+	 * @return
+	 */
 	public static final Marking.Task<Boolean> LT(Task<Integer> lhs, Task<Integer> rhs) {
 		return new Task<Boolean>() {
 			@Override
 			public String getName() {
-				return "<";
+				return lhs.getName() + " < " + rhs.getName();
 			}
 
 			@Override
 			public Result<Boolean> apply(Commit c) throws IOException {
 				Result<Integer> l = lhs.apply(c);
 				Result<Integer> r = rhs.apply(c);
-				return new BooleanResult(l.getValue() < r.getValue()) {
+				return new Result<Boolean>() {
+					@Override
+					public Boolean getValue() {
+						return l.getValue() < r.getValue();
+					}
+					@Override
+					public String toSummaryString(int width) {
+						return l.toString() + " < " + r.toString();
+					}
 
 					@Override
-					public String toString(int width) {
-						return l.toString() + " < " + r.toString();
+					public String toProvenanceString(int width) {
+						return l.toProvenanceString(width) + r.toProvenanceString(width);
 					}
 				};
 			}
 		};
 	}
+
+	/**
+	 * A simple marking task which returns the size of a commit (in bytes).
+	 */
+	public static final Marking.Task<Integer> COMMIT_SIZE = new Marking.Task<Integer>() {
+
+		@Override
+		public String getName() {
+			return "Commit Size";
+		}
+
+		@Override
+		public Marking.Result<Integer> apply(Commit c) throws IOException {
+			final int size = (int) c.size();
+			return new Marking.Result<Integer>() {
+				@Override
+				public Integer getValue() {
+					return size;
+				}
+
+				@Override
+				public String toSummaryString(int w) {
+					return "";
+				}
+
+				@Override
+				public String toProvenanceString(int w) {
+					String r = Util.toLineString('-', w);
+					r += "\nCommit size:\n\n";
+					int total = 0;
+					for (Commit.Entry e : c.getEntries()) {
+						total += e.size();
+						if (e.changed()) {
+							r += Util.toLineString(e.getPath(), ' ', e.size() + " bytes", w) + "\n";
+						}
+					}
+					r += Util.toLineString("", ' ', "= " + total + " bytes", w) + "\n";
+					return r;
+				}
+			};
+		}
+	};
 }

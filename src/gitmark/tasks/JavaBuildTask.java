@@ -27,7 +27,7 @@
 //CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 //OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 //OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-package gitmark.marker;
+package gitmark.tasks;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,11 +36,18 @@ import java.util.List;
 
 import gitmark.core.Commit;
 import gitmark.core.Marking;
-import gitmark.core.Marking.BooleanResult;
 import gitmark.util.JavaCompiler;
 import gitmark.util.Util;
 
-public class JavaBuildMarker implements Marking.Task<Boolean> {
+/**
+ * A task responsible for building all the Java source files in a given commit.
+ * This task can be configured in different ways, such as including certain
+ * libraries on the class path.
+ *
+ * @author David J. Pearce
+ *
+ */
+public class JavaBuildTask implements Marking.Task<Boolean> {
 
 	@Override
 	public String getName() {
@@ -63,21 +70,29 @@ public class JavaBuildMarker implements Marking.Task<Boolean> {
 			Integer exitCode = result.getExitCode();
 			// Determine whether build was successful or not.
 			final boolean success = (exitCode != null && exitCode == 0);
-			return new BooleanResult(success) {
+			return new Marking.Result<Boolean>() {
 				@Override
-				public String toString(int width) {
-					String r = "";
+				public Boolean getValue() {
+					return success;
+				}
+				@Override
+				public String toSummaryString(int width) {
+					return "";
+				}
+
+				@Override
+				public String toProvenanceString(int width) {
+					String r = Util.toLineString('-', width);
+					r += "\nJava Build:\n\n";
 					String out = new String(result.getStdOut());
 					String err = new String(result.getStdErr());
 					if (exitCode == null) {
-						r += "\n(timeout)\n";
+						r += "(timeout)\n";
 					}
 					if (out.length() > 0) {
-						r += "\n";
 						r += out;
 					}
 					if (err.length() > 0) {
-						r += "\n";
 						r += err;
 					}
 					return r;
