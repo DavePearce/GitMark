@@ -111,17 +111,18 @@ public class Main {
 			System.out.println(Util.toLineString(n, '.', "[" + r.getResult().getValue() + " marks]", TEXTWIDTH));
 		}
 		// Now print report details
-		for (Marking.Report r : reports) {
-			printReport(r);
+		for(int i=0;i!=reports.size();++i) {
+			Marking.Report r = reports.get(i);
+			printReport(i,r);
 		}
 	}
 
-	private static void printReport(Marking.Report r) {
+	private static void printReport(int i, Marking.Report r) {
 		Marking.Result<Integer> result = r.getResult();
 		System.out.println();
 		System.out.println();
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
-		System.out.println(Util.toLineString("COMMIT: " + r.getCommit().getObjectId().getName(), ' ',
+		System.out.println(Util.toLineString("COMMIT#" + i + ": " + r.getCommit().getObjectId().getName(), ' ',
 				result.getValue() + " marks", TEXTWIDTH));
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
 		System.out.println("\"" + r.getCommit().getTitle() + "\"\n");
