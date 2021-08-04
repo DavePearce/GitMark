@@ -29,6 +29,7 @@
 //OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package gitmark.util;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -86,6 +87,19 @@ public class JavaCompiler {
 		return this;
 	}
 
+	/**
+	 * Set the classpath
+	 * @param cp
+	 * @return
+	 */
+	public JavaCompiler setClassPath(String cp) {
+		String[] parts = cp.split(File.pathSeparator);
+		for(String p : parts) {
+			classpath.add(p);
+		}
+		return this;
+	}
+
 	public Util.Result compile(List<Path> files) throws IOException {
 		ArrayList<String> args = new ArrayList<>();
 		args.add(command);
@@ -114,7 +128,7 @@ public class JavaCompiler {
 		String r = "";
 		for (int i = 0; i != path.size(); ++i) {
 			if (i != 0) {
-				r += ";";
+				r += File.pathSeparator;
 			}
 			r += path.get(i);
 		}

@@ -1,8 +1,5 @@
 package gitmark.util;
 
-// This program is copyright VUW.
-// You are granted permission to use it to construct your answer to a SWEN221 assignment.
-// You may not distribute it in any other way without permission.
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -25,7 +22,11 @@ public class ProcessTimerMethod {
 	/**
 	 * Extract the classpath of the enclosing JVM as well.
 	 */
-	public static String CLASSPATH = System.getProperty("java.class.path");
+	private String classpath;
+
+	public ProcessTimerMethod(String classpath) {
+		this.classpath = classpath;
+	}
 
 	/**
 	 * Execute a <code>static</code> method in a given receiver class using a given
@@ -41,7 +42,7 @@ public class ProcessTimerMethod {
 	 * @return
 	 * @throws Throwable
 	 */
-	public static Outcome exec(int timeout, String receiver, String method, Object... methodArgs) throws Throwable {
+	public Outcome exec(int timeout, String receiver, String method, Object... methodArgs) throws Throwable {
 		return exec(timeout, receiver, null, method, methodArgs);
 	}
 
@@ -60,7 +61,7 @@ public class ProcessTimerMethod {
 	 * @return
 	 * @throws Throwable
 	 */
-	public static Outcome exec(int timeout, String receiver, String method, Class<?>[] methodTypes, Object... methodArgs) throws Throwable {
+	public Outcome exec(int timeout, String receiver, String method, Class<?>[] methodTypes, Object... methodArgs) throws Throwable {
 		return exec(timeout, receiver, null, method, methodTypes, methodArgs);
 	}
 	/**
@@ -80,7 +81,7 @@ public class ProcessTimerMethod {
 	 * @return
 	 * @throws Throwable
 	 */
-	public static Outcome exec(int timeout, String receiver, Object[] constructorArgs, String method, Object... methodArgs) throws Throwable {
+	public Outcome exec(int timeout, String receiver, Object[] constructorArgs, String method, Object... methodArgs) throws Throwable {
 		Class<?>[] constructorTypes = (constructorArgs == null) ? null : toUnboxedClassTypes(constructorArgs);
 		Class<?>[] methodTypes = toUnboxedClassTypes(methodArgs);
 		return exec(timeout,receiver,constructorTypes,constructorArgs,method,methodTypes,methodArgs);
@@ -104,7 +105,7 @@ public class ProcessTimerMethod {
 	 * @return
 	 * @throws Throwable
 	 */
-	public static Outcome exec(int timeout, String receiver, Object[] constructorArgs, String method, Class<?>[] methodTypes, Object... methodArgs) throws Throwable {
+	public Outcome exec(int timeout, String receiver, Object[] constructorArgs, String method, Class<?>[] methodTypes, Object... methodArgs) throws Throwable {
 		Class<?>[] constructorTypes = (constructorArgs == null) ? null : toUnboxedClassTypes(constructorArgs);
 		return exec(timeout,receiver,constructorTypes,constructorArgs,method,methodTypes,methodArgs);
 	}
@@ -128,7 +129,7 @@ public class ProcessTimerMethod {
 	 * @return
 	 * @throws Throwable
 	 */
-	public static Outcome exec(int timeout, String receiver, Class<?>[] constructorTypes, Object[] constructorArgs, String method, Class<?>[] methodTypes, Object... methodArgs) throws Throwable {
+	public Outcome exec(int timeout, String receiver, Class<?>[] constructorTypes, Object[] constructorArgs, String method, Class<?>[] methodTypes, Object... methodArgs) throws Throwable {
 		// ===================================================
 		// Construct command
 		// ===================================================
@@ -136,7 +137,7 @@ public class ProcessTimerMethod {
 		command.add(JAVA_CMD);
 		command.add("-ea"); // enable assertions by default
 		command.add("-cp");
-		command.add(CLASSPATH);
+		command.add(classpath);
 		command.add(ProcessTimerMethod.class.getCanonicalName());
 
 		// ===================================================

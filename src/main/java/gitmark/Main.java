@@ -55,12 +55,13 @@ public class Main {
 	private static final int TEXTWIDTH = 80;
 	private static final int TIMEOUT = 1000;
 
-	private static final Marking.Task<Boolean> JAVA_BUILD = new JavaBuildTask();
-	private static final Marking.Task<Boolean> JAVA_TEST = new JavaTestTask(TIMEOUT,
+	private static final Marking.Generator<Boolean> JAVA_BUILD = JavaBuildTask.Generator;
+	private static final Marking.Generator<Boolean> JAVA_TEST = JavaTestTask.Generator(TIMEOUT,
 			"pacman.server.testing.SinglePlayerTests");
+	private static final Marking.Task<Boolean> JAVA_BUILD_TEST = CONTAINER(AND(JAVA_BUILD, JAVA_TEST));
 
-	private static final Marking.Task<Integer> MARK = IF(AND(JAVA_BUILD, JAVA_TEST),
-			IF(LT(COMMIT_SIZE, INT(100)), ONE, ZERO), MINUS_ONE);
+	private static final Marking.Task<Integer> MARK = IF(JAVA_BUILD_TEST, IF(LT(COMMIT_SIZE, INT(100)), ONE, ZERO),
+			MINUS_ONE);
 
 	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
 		System.out.println("Loading repository from " + args[0]);

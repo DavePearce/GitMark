@@ -26,6 +26,8 @@
   <property name="GROUP_ID" value="${mypom.groupId}"/>
   <property name="ARTIFACT_ID" value="${mypom.artifactId}"/>
   <property name="VERSION" value="${mypom.version}"/>
+  <!-- Misc properties -->
+  <property name="JAVA_VERSION" value="11"/>  
   <!-- Define target jar files -->
   <property name="CLASS_JAR" value="${BIN_DIR}/${ARTIFACT_ID}-${VERSION}.jar"/>
   <property name="JAVA_JAR" value="${BIN_DIR}/${ARTIFACT_ID}-${VERSION}-sources.jar"/>
@@ -36,11 +38,5 @@
     <filename name="**/*.jar"/>
     <filename name="**/maven*" negate="True"/>
   </fileset>
-
-  <!-- Identify Local Dependencies -->
-  <!-- <maven:dependencies filesetId="remote.dependencies"  pathId="remote.dependencies"> -->
-  <!--   <dependency groupId="org.junit.jupiter" artifactId="junit-jupiter-params" version="5.7.0"/>     -->
-  <!--   <remoteRepository refid="remote.repository" /> -->
-  <!-- </maven:dependencies> -->
 
 </project>

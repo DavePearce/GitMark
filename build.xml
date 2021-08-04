@@ -63,7 +63,7 @@
     </copy>
     <echo message="Copying scripts..."/>
     <copy todir="${RELEASE_DIR}/bin">
-      <fileset dir="bin">
+      <fileset dir="scripts">
 	<include name="gitmark"/>
       </fileset>
     </copy>

@@ -30,12 +30,12 @@
 package gitmark.tasks;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import gitmark.core.Commit;
 import gitmark.core.Marking;
+import gitmark.core.Marking.Task;
 import gitmark.util.JavaCompiler;
 import gitmark.util.Util;
 
@@ -48,6 +48,23 @@ import gitmark.util.Util;
  *
  */
 public class JavaBuildTask implements Marking.Task<Boolean> {
+	public static final Marking.Generator<Boolean> Generator = new Marking.Generator<Boolean>() {
+
+		@Override
+		public String getName() {
+			return "Java Build";
+		}
+
+		@Override
+		public Task<Boolean> apply(Path dir) throws IOException {
+			return new JavaBuildTask(dir);
+		}
+	};
+	private final Path dir;
+
+	public JavaBuildTask(Path dir) {
+		this.dir = dir;
+	}
 
 	@Override
 	public String getName() {
@@ -56,51 +73,45 @@ public class JavaBuildTask implements Marking.Task<Boolean> {
 
 	@Override
 	public Marking.Result<Boolean> apply(Commit c) throws IOException {
-		// Create temporary directory for checkout.
-		Path dir = Files.createTempDirectory("gitmark");
-		//
-		try {
-			// Checkout all Java source files
-			List<Path> files = Util.checkout(dir, c, s -> s.endsWith(".java"));
-			// Attempt to build Java source files
-			JavaCompiler javac = new JavaCompiler();
-			javac.setWarnings(false);
-			javac.setSourceDirectory(dir);
-			Util.Result result = javac.compile(files);
-			Integer exitCode = result.getExitCode();
-			// Determine whether build was successful or not.
-			final boolean success = (exitCode != null && exitCode == 0);
-			return new Marking.Result<Boolean>() {
-				@Override
-				public Boolean getValue() {
-					return success;
-				}
-				@Override
-				public String toSummaryString(int width) {
-					return "";
-				}
+		String classpath = System.getProperty("java.class.path");
+		// Checkout all Java source files
+		List<Path> files = Util.checkout(dir, c, s -> s.endsWith(".java"));
+		// Attempt to build Java source files
+		JavaCompiler javac = new JavaCompiler();
+		javac.setWarnings(false);
+		javac.setSourceDirectory(dir);
+		javac.setClassPath(classpath);
+		Util.Result result = javac.compile(files);
+		Integer exitCode = result.getExitCode();
+		// Determine whether build was successful or not.
+		final boolean success = (exitCode != null && exitCode == 0);
+		return new Marking.Result<Boolean>() {
+			@Override
+			public Boolean getValue() {
+				return success;
+			}
+			@Override
+			public String toSummaryString(int width) {
+				return "";
+			}
 
-				@Override
-				public String toProvenanceString(int width) {
-					String r = Util.toLineString('-', width);
-					r += "\nJava Build:\n\n";
-					String out = new String(result.getStdOut());
-					String err = new String(result.getStdErr());
-					if (exitCode == null) {
-						r += "(timeout)\n";
-					}
-					if (out.length() > 0) {
-						r += out;
-					}
-					if (err.length() > 0) {
-						r += err;
-					}
-					return r;
+			@Override
+			public String toProvenanceString(int width) {
+				String r = Util.toLineString('-', width);
+				r += "\nJava Build:\n\n";
+				String out = new String(result.getStdOut());
+				String err = new String(result.getStdErr());
+				if (exitCode == null) {
+					r += "(timeout)\n";
 				}
-			};
-		} finally {
-			// No matter what, delete the build directory
-			Util.delete(dir);
-		}
+				if (out.length() > 0) {
+					r += out;
+				}
+				if (err.length() > 0) {
+					r += err;
+				}
+				return r;
+			}
+		};
 	}
 }

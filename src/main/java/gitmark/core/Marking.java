@@ -30,6 +30,8 @@
 package gitmark.core;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.function.Function;
 
 import gitmark.tasks.JavaBuildTask;
@@ -61,6 +63,24 @@ public class Marking {
 		 * @throws IOException
 		 */
 		public Result<T> apply(Commit c) throws IOException;
+	}
+
+	public interface Generator<T>  {
+		/**
+		 * Get the name of this task. This is used for reporting purposes only.
+		 *
+		 * @return
+		 */
+		public String getName();
+
+		/**
+		 * Apply this generator to a given directory.
+		 *
+		 * @param c
+		 * @return
+		 * @throws IOException
+		 */
+		public Task<T> apply(Path dir) throws IOException;
 	}
 
 	/**
@@ -310,4 +330,49 @@ public class Marking {
 			};
 		}
 	};
+
+	public static Generator<Boolean> AND(Generator<Boolean> lhs, Generator<Boolean> rhs) {
+		return new Generator<Boolean>() {
+			@Override
+			public String getName() {
+				return lhs.getName() + " && " + rhs.getName();
+			}
+
+			@Override
+			public Task<Boolean> apply(Path dir) throws IOException {
+				Task<Boolean> l = lhs.apply(dir);
+				Task<Boolean> r = rhs.apply(dir);
+				return AND(l, r);
+			}
+		};
+	}
+
+	/**
+	 * Construct a task which operates within a given directory.
+	 *
+	 * @param task
+	 * @return
+	 */
+	public static final Marking.Task<Boolean> CONTAINER(Generator<Boolean> generator) {
+		return new Task<Boolean>() {
+			@Override
+			public String getName() {
+				return "(within) " + generator.getName();
+			}
+
+			@Override
+			public Result<Boolean> apply(Commit c) throws IOException {
+				Path dir = Files.createTempDirectory("gitmark");
+				try {
+					// Apply the generator to produce a task
+					Task<Boolean> t = generator.apply(dir);
+					// Apply the task within this directory
+					return t.apply(c);
+				} finally {
+					// No matter what, delete the build directory
+					Util.delete(dir);
+				}
+			}
+		};
+	}
 }
