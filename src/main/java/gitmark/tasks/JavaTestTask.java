@@ -36,7 +36,9 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Map;
 
+import gitmark.Main;
 import gitmark.core.Commit;
 import gitmark.core.Marking;
 import gitmark.core.Marking.Task;
@@ -61,10 +63,10 @@ public class JavaTestTask implements Marking.Task<Boolean> {
 	}
 
 	@Override
-	public gitmark.core.Marking.Result<Boolean> apply(Commit c) throws IOException {
+	public gitmark.core.Marking.Result<Boolean> apply(Commit c, Map<String, Object> env) throws IOException {
 		String classpath = System.getProperty("java.class.path");
 		ProcessTimerMethod tm = new ProcessTimerMethod(
-				classpath + File.pathSeparator + dir.toString() + File.separator + "src");
+				classpath + File.pathSeparator + dir.toString() + File.separator + Main.JAVA_SRC_DIR);
 		Result[] results = new Result[testClassNames.length];
 		// First, execute all test cases and gather the results together.
 		for (int i = 0; i != testClassNames.length; ++i) {

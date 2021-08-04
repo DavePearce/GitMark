@@ -32,6 +32,7 @@ package gitmark.tasks;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import gitmark.core.Commit;
 import gitmark.core.Marking;
@@ -72,7 +73,7 @@ public class JavaBuildTask implements Marking.Task<Boolean> {
 	}
 
 	@Override
-	public Marking.Result<Boolean> apply(Commit c) throws IOException {
+	public Marking.Result<Boolean> apply(Commit c, Map<String, Object> env) throws IOException {
 		String classpath = System.getProperty("java.class.path");
 		// Checkout all Java source files
 		List<Path> files = Util.checkout(dir, c, s -> s.endsWith(".java"));

@@ -63,11 +63,13 @@ public class Commit implements Iterable<Commit.Entry> {
 	private final ObjectId id;
 	private final String title;
 	private final List<Entry> entries;
+	private final boolean first;
 
-	public Commit(ObjectId id, String title, List<Entry> entries) {
+	public Commit(ObjectId id, String title, List<Entry> entries, boolean first) {
 		this.id = id;
 		this.title = title;
 		this.entries = entries;
+		this.first = first;
 	}
 
 	public long size() {
@@ -84,6 +86,10 @@ public class Commit implements Iterable<Commit.Entry> {
 
 	public String getTitle() {
 		return title;
+	}
+
+	public boolean isFirst() {
+		return first;
 	}
 
 	public List<Entry> getEntries() {
@@ -192,12 +198,15 @@ public class Commit implements Iterable<Commit.Entry> {
 	public static Commit toCommit(Git git, RevCommit before, RevCommit after) throws GitAPIException, IOException {
 		final Repository repository = git.getRepository();
 		List<Commit.Entry> entries = new ArrayList<>();
+		boolean first;
 		if (before == null) {
 			// This is the initial commit, therefore all files in the initial tree are
 			// included.
 			walkEntries(repository, after, (path, bytes) -> {
 				entries.add(new Commit.Entry(path, new byte[0], bytes));
 			});
+			// This is the first commit
+			first = true;
 		} else {
 			// This is not the initial commit, therefore use the default diff algorithm to
 			// determine which files are changed.
@@ -217,8 +226,10 @@ public class Commit implements Iterable<Commit.Entry> {
 					entries.add(new Commit.Entry(path, bytes, bytes));
 				}
 			});
+			// Not first!
+			first = false;
 		}
-		return new Commit(after.getId(), after.getShortMessage(), entries);
+		return new Commit(after.getId(), after.getShortMessage(), entries, first);
 	}
 
 	/**

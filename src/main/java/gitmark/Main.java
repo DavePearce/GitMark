@@ -32,8 +32,11 @@ package gitmark;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
@@ -50,27 +53,57 @@ import gitmark.tasks.JavaTestTask;
 import static gitmark.core.Marking.*;
 
 import gitmark.util.Util;
+import gitmark.util.OptArg;
 
 public class Main {
 	private static final int TEXTWIDTH = 80;
 	private static final int TIMEOUT = 1000;
+	/**
+	 * The directory where src files are expected.
+	 */
+	public static final String JAVA_SRC_DIR = "src";
 
 	private static final Marking.Generator<Boolean> JAVA_BUILD = JavaBuildTask.Generator;
 	private static final Marking.Generator<Boolean> JAVA_TEST = JavaTestTask.Generator(TIMEOUT,
 			"pacman.server.testing.SinglePlayerTests");
 	private static final Marking.Task<Boolean> JAVA_BUILD_TEST = CONTAINER(AND(JAVA_BUILD, JAVA_TEST));
 
-	private static final Marking.Task<Integer> MARK = IF(JAVA_BUILD_TEST, IF(LT(COMMIT_SIZE, INT(100)), ONE, ZERO),
-			MINUS_ONE);
+	private static final Marking.Task<Integer> stage1 = IF(GT(INTVAR("Commit Size"), INT(1000)),
+			DIV(INTVAR("Commit Size"), INT(-1000)), ZERO);
+	private static final Marking.Task<Integer> stage2 = IF(LT(INTVAR("Commit Size"), INT(500)), ONE, stage1);
+	// No marks for first commit.
+	private static final Marking.Task<Integer> stage3 = LET("Commit Size", ABS(COMMIT_SIZE), stage2);
+	private static final Marking.Task<Integer> stage4 = IF(FIRST_COMMIT, ZERO, stage3);
+	/**
+	 * Put together marking calculation
+	 */
+	private static final Marking.Task<Integer> MARK = IF(JAVA_BUILD_TEST, stage4, MINUS_ONE);
 
-	public static void main(String[] args) throws IOException, NoHeadException, GitAPIException {
-		System.out.println("Loading repository from " + args[0]);
+	public static final OptArg[] DEFAULT_OPTIONS = new OptArg[] {
+			new OptArg("help", "Print this help information"),
+			new OptArg("verbose", "Print all ouput from tests regardless of pass/fail"),
+			new OptArg("last", "Only calculate for last commit") };
+
+	public static void main(String[] _args) throws IOException, NoHeadException, GitAPIException {
+		// Process command-line arguments
+		ArrayList<String> args = new ArrayList<>(Arrays.asList(_args));
+		Map<String, Object> values = OptArg.parseOptions(args, DEFAULT_OPTIONS);
+		boolean last = values.containsKey("last");
+		String location = ".";
+		if(values.containsKey("help")) {
+			OptArg.usage(System.out, DEFAULT_OPTIONS);
+			return;
+		} else if(args.size() > 0){
+			location = args.get(0);
+		}
+		location += File.separator + ".git";
+		System.out.println("Loading repository from " + location);
 		FileRepositoryBuilder builder = new FileRepositoryBuilder();
-		Repository repository = builder.setGitDir(new File(args[0])).readEnvironment().findGitDir().build();
+		Repository repository = builder.setGitDir(new File(location)).readEnvironment().findGitDir().build();
 		//
 		Git git = new Git(repository);
 		//
-		List<Marking.Report> reports = mark(git, MARK);
+		List<Marking.Report> reports = mark(git, last, MARK);
 		// Print report summaries
 		for (Marking.Report r : reports) {
 			Commit c = r.getCommit();
@@ -86,6 +119,7 @@ public class Main {
 	private static void printReport(Marking.Report r) {
 		Marking.Result<Integer> result = r.getResult();
 		System.out.println();
+		System.out.println();
 		System.out.println(Util.toLineString('=',TEXTWIDTH));
 		System.out.println(Util.toLineString("COMMIT: " + r.getCommit().getObjectId().getName(), ' ',
 				result.getValue() + " marks", TEXTWIDTH));
@@ -93,6 +127,7 @@ public class Main {
 		System.out.println("\"" + r.getCommit().getTitle() + "\"\n");
 		// Print task summaries
 		System.out.println(result.toSummaryString(TEXTWIDTH));
+		System.out.println();
 		// Print provenance
 		System.out.println(result.toProvenanceString(TEXTWIDTH));
 	}
@@ -107,13 +142,18 @@ public class Main {
 	 * @throws GitAPIException
 	 * @throws IOException
 	 */
-	private static List<Marking.Report> mark(Git git, Marking.Task<Integer> task)
+	private static List<Marking.Report> mark(Git git, boolean last, Marking.Task<Integer> task)
 			throws NoHeadException, GitAPIException, IOException {
 		List<Commit> commits = toCommits(git, git.log().call());
 		List<Marking.Report> results = new ArrayList<>();
-		// Compute all the marks
-		for (Commit c : commits) {
-			results.add(new Marking.Report(c, task.apply(c)));
+		if (last) {
+			Commit c = commits.get(commits.size() - 1);
+			results.add(new Marking.Report(c, task.apply(c, new HashMap<>())));
+		} else {
+			// Compute all the marks
+			for (Commit c : commits) {
+				results.add(new Marking.Report(c, task.apply(c, new HashMap<>())));
+			}
 		}
 		return results;
 	}
