@@ -184,6 +184,54 @@ public class Marking {
 	}
 
 	/**
+	 * Construct a marking task composed from other tasks which implements a
+	 * conditional.
+	 *
+	 * @param <T>
+	 * @param condition
+	 * @param yes
+	 * @param no
+	 * @return
+	 */
+	public static Task<Boolean> AND(Task<Boolean> lhs, Task<Boolean> rhs) {
+		return new Task<Boolean>() {
+			@Override
+			public String getName() {
+				return lhs.getName() + " && " + rhs.getName();
+			}
+
+			@Override
+			public Result<Boolean> apply(Commit commit) throws IOException {
+				Result<Boolean> c = lhs.apply(commit);
+				Result<Boolean> r;
+				if (c.getValue()) {
+					r = rhs.apply(commit);
+				} else {
+					r = c;
+				}
+				return new Result<Boolean>() {
+					@Override
+					public String toSummaryString(int width) {
+						String b = c.getValue() ? "Yes." : "No.";
+						String str = lhs.getName() + "? " + b + "\n";
+						return str + r.toSummaryString(width);
+					}
+
+					@Override
+					public Boolean getValue() {
+						return r.getValue();
+					}
+
+					@Override
+					public String toProvenanceString(int width) {
+						return c.toProvenanceString(width) + r.toProvenanceString(width);
+					}
+				};
+			}
+		};
+	}
+
+	/**
 	 * A simple marking task which checks whether the outcome of one task is lower
 	 * than another.
 	 *
