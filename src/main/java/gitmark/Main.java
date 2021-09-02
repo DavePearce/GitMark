@@ -57,7 +57,11 @@ import gitmark.util.OptArg;
 
 public class Main {
 	private static final int TEXTWIDTH = 80;
-	private static final int TIMEOUT = 1000;
+	/**
+	 * The amount of time (in ms) for a single task to executed. For example, the
+	 * time needed to build all files or run all tests in a given commit.
+	 */
+	private static final int TIMEOUT = 60000;
 	/**
 	 * The directory where src files are expected.
 	 */
@@ -104,17 +108,24 @@ public class Main {
 		Git git = new Git(repository);
 		//
 		List<Marking.Report> reports = mark(git, last, MARK);
-		// Print report summaries
-		for (Marking.Report r : reports) {
-			Commit c = r.getCommit();
-			String n = c.getObjectId().getName();
-			System.out.println(Util.toLineString(n, '.', "[" + r.getResult().getValue() + " marks]", TEXTWIDTH));
-		}
 		// Now print report details
 		for(int i=0;i!=reports.size();++i) {
 			Marking.Report r = reports.get(i);
 			printReport(i,r);
 		}
+		long total = 0;
+		// Print report summaries
+		System.out.println(Util.toLineString('-', TEXTWIDTH));
+		System.out.println("Sumary");
+		System.out.println(Util.toLineString('-', TEXTWIDTH));
+		for (Marking.Report r : reports) {
+			Commit c = r.getCommit();
+			String n = c.getObjectId().getName();
+			total += r.getResult().getValue();
+			System.out.println(Util.toLineString(n, '.', "[" + r.getResult().getValue() + " marks]", TEXTWIDTH));
+		}
+		System.out.println(Util.toLineString('-', TEXTWIDTH));
+		System.out.println(Util.toLineString("Total", ' ', "[" + total + " marks]", TEXTWIDTH));
 	}
 
 	private static void printReport(int i, Marking.Report r) {

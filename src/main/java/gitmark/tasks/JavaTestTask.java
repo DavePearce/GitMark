@@ -155,6 +155,7 @@ public class JavaTestTask implements Marking.Task<Boolean> {
 			stderr = new String(r.getStderr());
 			if (r.exitCode() == null) {
 				outcome = ExitCode.TIMEOUT;
+				stderr += "Timeout after " + timeout + "ms";
 			} else if (r.exitCode() == 0) {
 				outcome = ExitCode.OK;
 			} else {
@@ -246,7 +247,7 @@ public class JavaTestTask implements Marking.Task<Boolean> {
 	private static String toProvenanceString(int width, Result r) {
 		String str = "";
 		if (r.outcome != ExitCode.OK) {
-			return r.name + " ... FAILED";
+			return str + r.name + " ... FAILED\n" + r.stdout + "\n" + r.stderr;
 		} else {
 			Pair<String, String>[] result = (Pair[]) r.result.getReturnAs(Pair[].class);
 			int count = 0;
