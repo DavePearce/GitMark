@@ -125,7 +125,7 @@ public class Main {
 			System.out.println(Util.toLineString(n, '.', "[" + r.getResult().getValue() + " marks]", TEXTWIDTH));
 		}
 		System.out.println(Util.toLineString('-', TEXTWIDTH));
-		System.out.println(Util.toLineString("Total", ' ', "[" + total + " marks]", TEXTWIDTH));
+		System.out.println("GitMark Total: " + total);
 	}
 
 	private static void printReport(int i, Marking.Report r) {
